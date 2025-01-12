@@ -86,8 +86,8 @@ def main():
             print(Fore.RED + "Status = [Fail]")
             return False
 
-    # Use threading to try multiple passwords in parallel
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+    # Use threading to try 2 passwords at a time
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
         # Map the try_password function to all passwords and submit them concurrently
         results = {executor.submit(try_password, password): password for password in passwords}
 
@@ -101,4 +101,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-        
+    
