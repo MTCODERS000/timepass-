@@ -5,7 +5,6 @@ from datetime import datetime
 from colorama import init, Fore
 import concurrent.futures
 import random
-import string
 
 # Initialize colorama
 init(autoreset=True)
@@ -87,7 +86,7 @@ def test_speed(username, password, delay, max_workers):
             return False
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        results = {executor.submit(try_password, password): password for _ in range(2)}  # Test two passwords at once
+        results = {executor.submit(try_password, password): password for _ in range(1)}  # Test only one password at a time
         for future in concurrent.futures.as_completed(results):
             if future.result():
                 print(Fore.GREEN + "[*] Bruteforce attack completed.")
@@ -110,13 +109,15 @@ def main():
 
     print(Fore.GREEN + f"[*] Loaded {len(passwords)} passwords from {password_file}")
 
-    # Test different configurations of delay and max_workers
-    delays = [2, 5, 10, 15, 20]  # Different delay times in seconds
-    max_workers_list = [2, 4, 6, 8]  # Different number of concurrent threads
+    # Test minimal delay and workers
+    delays = [1]  # Start with the minimal delay of 1 second
+    max_workers_list = [1]  # Start with 1 worker at a time
 
     for delay in delays:
         for max_workers in max_workers_list:
             test_speed(username, password, delay, max_workers)
 
 if __name__ == "__main__":
-    main() 
+    main()
+    
+    
